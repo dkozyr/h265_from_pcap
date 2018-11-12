@@ -6,7 +6,7 @@
 #include "pcap.h"
 using namespace std;
 
-const vector<char> annex_b = { 0, 0, 0, 1 };
+const vector<char> ANNEX_B = { 0, 0, 0, 1 };
 const char H265_PTYPE = 96; // hard-coded value
 const int RTP_OFFSET = 42;  // hard-coded offset to RTP header
 const int RTP_PAYLOAD_OFFSET = 54;  // hard-coded offset to RTP payload
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 
                 if (fu_s)
                 {
-                    h265file.write(annex_b.data(), 4);
+                    h265file.write(ANNEX_B.data(), 4);
 
                     const vector<char> nal_unit = { fu_type << 1, 1 }; // very simple implementation
                     h265file.write(nal_unit.data(), 2);
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
             }
             else
             {
-                h265file.write(annex_b.data(), 4);
+                h265file.write(ANNEX_B.data(), 4);
                 h265file.write(reinterpret_cast<const char*>(payload), payload_size);
             }
             cout << endl;
@@ -104,3 +104,4 @@ int main(int argc, char *argv[]) {
     system("pause");
     return 0;
 }
+
