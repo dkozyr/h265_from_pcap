@@ -16,6 +16,3 @@ Note: you must covert it to .pcap file (not .pcapng) using Wireshark
 
    https://tools.ietf.org/html/rfc7798#section-4.4
 
-### Notes
-
-I'm not sure it works correct :)
