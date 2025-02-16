@@ -1,21 +1,20 @@
-#include <iostream>
+#include "pcap.h"
 #include <string>
 #include <vector>
-#include <algorithm>
 #include <fstream>
-#include "pcap.h"
+#include <iostream>
 using namespace std;
 
 const vector<char> ANNEX_B = { 0, 0, 0, 1 };
-const char H265_PTYPE = 96; // hard-coded value
+const uint8_t H265_PTYPE = 96; // hard-coded value
 const int RTP_OFFSET = 42;  // hard-coded offset to RTP header
 const int RTP_PAYLOAD_OFFSET = 54;  // hard-coded offset to RTP payload
 const int NAL_UNIT_FU = 49;
 
-const u_char* rtp_payload(const u_char* packet, u_int packet_lenth, char ptype, u_int& payload_length) {
+const uint8_t* rtp_payload(const uint8_t* packet, uint32_t packet_length, uint8_t ptype, uint32_t& payload_length) {
     payload_length = 0;
 
-    if (packet_lenth <= RTP_PAYLOAD_OFFSET) // check packet size
+    if (packet_length <= RTP_PAYLOAD_OFFSET) // check packet size
         return nullptr;
     if ((packet[RTP_OFFSET] >> 6) != 2) // check RFC 1889 version 2
         return nullptr;
@@ -23,10 +22,18 @@ const u_char* rtp_payload(const u_char* packet, u_int packet_lenth, char ptype, 
         return nullptr;
 
     const bool has_padding = !!(packet[RTP_OFFSET] & 0x20);
-    const int padding = has_padding ? static_cast<int>(packet[packet_lenth - 1]) : 0;
+    const int padding = has_padding ? static_cast<int>(packet[packet_length - 1]) : 0;
 
-    payload_length = packet_lenth - RTP_PAYLOAD_OFFSET - padding;
+    payload_length = packet_length - RTP_PAYLOAD_OFFSET - padding;
     return &packet[RTP_PAYLOAD_OFFSET];
+}
+
+uint16_t read_16bit(const uint8_t* data) {
+    return (static_cast<uint16_t>(data[0]) << 8) | data[1];
+}
+
+uint32_t read_32bit(const uint8_t* data) {
+    return (static_cast<uint32_t>(read_16bit(data)) << 16) | read_16bit(data + 2);
 }
 
 int main(int argc, char *argv[]) {
@@ -44,51 +51,49 @@ int main(int argc, char *argv[]) {
     char errbuff[PCAP_ERRBUF_SIZE];
     pcap_t* pcap = pcap_open_offline(file.c_str(), errbuff);
 
-    u_int packet_count = 0;
+    uint32_t packet_count = 0;
     while (pcap)
     {
         struct pcap_pkthdr *header;
-        const u_char *data;
+        const uint8_t *data;
 
         if (pcap_next_ex(pcap, &header, &data) < 0)
             break;
 
-        // Show a warning if the length captured is different
         if (header->len != header->caplen)
             cout << "Warning! Capture size different than packet size: " << header->len << " bytes" << endl;
 
-        /*
-        // Show the packet number
-        cout << "Packet #" << (++packet_count) << endl;
+        // cout << "Packet #" << (++packet_count) << ", "
+        //      << "size: " << header->len << " bytes, "
+        //      << "epoch time: " << header->ts.tv_sec << "." << header->ts.tv_usec << " seconds, "
+        //      << endl;
 
-        // Show the size in bytes of the packet
-        cout << "Packet size: " << header->len << " bytes" << endl;
-
-        // Show Epoch Time
-        cout << "Epoch Time: " << header->ts.tv_sec << ":" << header->ts.tv_usec << " seconds" << endl;
-        */
-
-        u_int payload_size = 0;
-        const u_char* payload = rtp_payload(data, header->caplen, H265_PTYPE, payload_size);
+        uint32_t payload_size = 0;
+        const uint8_t* payload = rtp_payload(data, header->caplen, H265_PTYPE, payload_size);
         if (payload_size)
         {
-            const int nal_unit_type = (payload[0] & 0x7F) >> 1;
-            cout << "nal unit: " << nal_unit_type << ", payload_size: " << payload_size << " ";
+            cout << "RTP seq num: " << read_16bit(data + RTP_OFFSET + 2) << ", ";
+            cout << "RTP timestamp: " << read_32bit(data + RTP_OFFSET + 4) << ", ";
+
+            const uint8_t nal_unit_type = (payload[0] & 0x7F) >> 1;
+            cout << "nal unit: " << (int)nal_unit_type << ", payload_size: " << payload_size;
 
             if (nal_unit_type == NAL_UNIT_FU)
             {
-                const char fu_header = payload[2];
+                const auto fu_header = payload[2];
                 const bool fu_s = !!(fu_header & 0x80);
                 const bool fu_e = !!(fu_header & 0x40);
-                const char fu_type = fu_header & 0x3F;
-                cout << "FU : " << fu_s << " " << fu_e << " " << (int)fu_type;
+                const auto fu_type = fu_header & 0x3F;
+                cout << ", FU: " << (fu_s ? "s" : " ") << (fu_e ? "e" : " ") << " fu_type: " << (int)fu_type;
 
                 if (fu_s)
                 {
                     h265file.write(ANNEX_B.data(), 4);
 
-                    const vector<char> nal_unit = { fu_type << 1, 1 }; // very simple implementation
-                    h265file.write(nal_unit.data(), 2);
+                    vector<uint8_t> nal_unit = {payload[0], payload[1]};
+                    nal_unit[0] &= 0x81;
+                    nal_unit[0] |= fu_type << 1;
+                    h265file.write(reinterpret_cast<const char*>(nal_unit.data()), 2);
                 }
                 h265file.write(reinterpret_cast<const char*>(&payload[3]), payload_size - 3);
             }
@@ -101,7 +106,5 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    system("pause");
     return 0;
 }
-
