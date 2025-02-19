@@ -9,7 +9,10 @@ const vector<char> ANNEX_B = { 0, 0, 0, 1 };
 const uint8_t H265_PTYPE = 96; // hard-coded value
 const int RTP_OFFSET = 42;  // hard-coded offset to RTP header
 const int RTP_PAYLOAD_OFFSET = 54;  // hard-coded offset to RTP payload
+const int NAL_UNIT_HEADER_SIZE = sizeof(uint16_t);
 const int NAL_UNIT_FU = 49;
+const int NAL_UNIT_AP = 48;
+const int NAL_UNIT_AP_NALU_SIZE = sizeof(uint16_t);
 
 const uint8_t* rtp_payload(const uint8_t* packet, uint32_t packet_length, uint8_t ptype, uint32_t& payload_length) {
     payload_length = 0;
@@ -70,7 +73,7 @@ int main(int argc, char *argv[]) {
 
         uint32_t payload_size = 0;
         const uint8_t* payload = rtp_payload(data, header->caplen, H265_PTYPE, payload_size);
-        if (payload_size)
+        if (payload_size > NAL_UNIT_HEADER_SIZE)
         {
             cout << "RTP seq num: " << read_16bit(data + RTP_OFFSET + 2) << ", ";
             cout << "RTP timestamp: " << read_32bit(data + RTP_OFFSET + 4) << ", ";
@@ -96,6 +99,27 @@ int main(int argc, char *argv[]) {
                     h265file.write(reinterpret_cast<const char*>(nal_unit.data()), 2);
                 }
                 h265file.write(reinterpret_cast<const char*>(&payload[3]), payload_size - 3);
+            }
+            else if (nal_unit_type == NAL_UNIT_AP)
+            {
+                cout << ", AP nal units size: ";
+                auto offset = NAL_UNIT_HEADER_SIZE;
+                while (offset + NAL_UNIT_AP_NALU_SIZE < payload_size)
+                {
+                    const auto nal_unit_size = read_16bit(payload + offset);
+                    cout << nal_unit_size << ", ";
+                    if (offset + NAL_UNIT_AP_NALU_SIZE + nal_unit_size > payload_size)
+                    {
+                        break;
+                    }
+                    h265file.write(ANNEX_B.data(), 4);
+                    h265file.write(reinterpret_cast<const char*>(&payload[offset]), nal_unit_size);
+                    offset += NAL_UNIT_AP_NALU_SIZE + nal_unit_size;
+                }
+                if (offset != payload_size)
+                {
+                    cout << "malformed!";
+                }
             }
             else
             {
