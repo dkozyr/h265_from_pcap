@@ -6,7 +6,7 @@ https://wiki.wireshark.org/SampleCaptures?action=AttachFile&do=get&target=1920x1
 
 Note: you must covert it to .pcap file (not .pcapng) using Wireshark
 
-Update: This project is a limited example of RTP H.265 depacketization. A full implementation with tests can be found in [Tau WebRTC streaming library](https://github.com/dkozyr/tau), along with a usage example in the [pcap-parser](https://github.com/dkozyr/tau/tree/main/apps/pcap-parser) tool
+<span style="color: red;">Update</span>: This project is a limited example of RTP H.265 depacketization. A full implementation with tests can be found in [Tau WebRTC streaming library](https://github.com/dkozyr/tau), along with a usage example in the [pcap-parser](https://github.com/dkozyr/tau/tree/main/apps/pcap-parser) tool
 
 ## Usefull links
 
